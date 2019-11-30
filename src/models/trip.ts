@@ -40,3 +40,7 @@ export enum TripStatus {
     TripOngoing = 'TripOngoing',
     TripEnded = 'TripEnded'
 }
+
+export interface TripEconomy {
+    cost:number;
+}

@@ -118,6 +118,7 @@ app.get("/auth/facebook/callback", passport.authenticate("facebook", { failureRe
  */
 app.post("/user/login",apiController.postLoginApi);
 app.get("/user/data",passportConfig.isAuthorized,apiController.getUserApi);
+app.get("/trip/cost",passportConfig.isAuthorized,apiController.getTripCost);
 
 
 export default app;

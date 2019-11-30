@@ -7,6 +7,8 @@ import { check, sanitize, validationResult } from "express-validator";
 import "../config/passport";
 import jwt from "jsonwebtoken";
 import {SESSION_SECRET} from "../util/secrets";
+import {GoogleMapsUtils} from "../util/google-maps-utils";
+import {TripEconomy} from "../models/trip";
 
 export const postLoginApi = (req: Request, res: Response, next: NextFunction) => {
     check("email", "Email is not valid").isEmail();
@@ -39,4 +41,19 @@ export const postLoginApi = (req: Request, res: Response, next: NextFunction) =>
 export const getUserApi = (req: Request, res: Response, next: NextFunction) => {
     res.json( req.user );
     next();
+};
+
+
+export const getTripCost = (req: Request, res: Response, next: NextFunction) => {
+    const {origin, destination} = req.query;
+    GoogleMapsUtils.getDirections(origin,destination)
+        .then(result =>{
+            const cost:TripEconomy = {cost: result.distance.value * 0.025} ;
+            res.send({
+                tripDirections: result,
+                tripEconomy: cost
+            } );
+            next();
+        });
+
 };
