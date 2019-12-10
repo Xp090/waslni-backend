@@ -28,6 +28,7 @@ export type UserDocument = mongoose.Document & {
     type: 'Rider' | 'Driver'
 };
 
+
 type comparePasswordFunction = (candidatePassword: string, cb: (err: Error, isMatch: boolean) => (void)) => void;
 
 export interface AuthToken {
@@ -56,7 +57,7 @@ const userSchema = new mongoose.Schema({
 
     socketConnected: Boolean,
 }, {timestamps: true, discriminatorKey: "type"});
-userSchema.index({ "location": "2dsphere" });
+userSchema.index({ "location": '2dsphere' });
 /**
  * Password hash middleware.
  */
@@ -109,7 +110,6 @@ userSchema.set("toJSON", {
     virtuals: true
 });
 export const User = mongoose.model<UserDocument>("User", userSchema);
-
 
 export enum DriverStatus {
     Offline = 'Offline',

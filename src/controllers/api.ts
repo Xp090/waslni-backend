@@ -48,7 +48,7 @@ export const getTripCost = (req: Request, res: Response, next: NextFunction) => 
     const {origin, destination} = req.query;
     GoogleMapsUtils.getDirections(origin,destination)
         .then(result =>{
-            const cost:TripEconomy = {cost: result.distance.value * 0.025} ;
+            const cost:TripEconomy = {cost: Math.round(result.distance.value * 0.025) } ;
             res.send({
                 tripDirections: result,
                 tripEconomy: cost

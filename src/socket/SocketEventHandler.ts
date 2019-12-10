@@ -1,6 +1,7 @@
 import {Socket} from "socket.io";
-import {User, UserDocument} from "../models/user";
+import {Driver, User, UserDocument} from "../models/user";
 import {GeoPointDB, LngLat} from "../models/location";
+import {query} from "express-validator";
 
 export function SocketHandler(userSocket: Socket) {
     const handler = new SocketEventHandler(userSocket,(socket, user) => {
@@ -19,22 +20,33 @@ export function SocketHandler(userSocket: Socket) {
         //     socket.broadcast.to("5d9cf5527b996135f898bea9").emit(SocketEvent.DriverLocation,data);
         // }
     });
-    handler.onFindDriver((socket, user, data) => {
-        User.find({ location: {
-            $nearSphere: {
-                $geometry:user.location
-                , $maxDistance: 5000
-            } } })
-            .exec((err, drivers) => {
+    handler.onFindDriverRequestFromRider((socket, user, data) => {
+        Driver.find( { location: {
+                    $nearSphere: {
+                        // @ts-ignore
+                        $geometry:user.location,
+                        $maxDistance: 500000
+                    } } })
+            .find((err, drivers) => {
                 if (err) return;
                 if(drivers.length == 0){
-                    socket.broadcast.to(user.id).emit(SocketEvent.FindDriverResponse,"no_driver_found");
+                    socket.to(user.id).emit(SocketEvent.FindDriverResponseToRider,"no_driver_found");
                 }
                 const foundDriver = drivers[0];
-                socket.broadcast.to(foundDriver.id).emit(SocketEvent.FindDriverRequest,null)
+                data.driver = foundDriver;
+                data.rider = user;
 
-
+                socket.broadcast.to(foundDriver.id).emit(SocketEvent.FindDriverRequestToDriver,data)
+                //socket.emit(SocketEvent.FindDriverResponse,foundDriver)
             })
+    });
+
+    handler.onDriverRespondToRiderRequest((socket, user, data) => {
+        if (data.driver == null) {
+            socket.to(data.rider.id).emit(SocketEvent.FindDriverResponseToRider,"Driver Declined")
+        }else{
+            socket.to(data.rider.id).emit(SocketEvent.FindDriverResponseToRider,data.driver)
+        }
     })
 }
 
@@ -61,8 +73,11 @@ export class SocketEventHandler {
     onUserUpdateLocation(socketEventFn: SocketEventFn<LngLat>) {
         this.socketEventFactory(SocketEvent.UpdateLocation,socketEventFn)
     }
-    onFindDriver(socketEventFn: SocketEventFn){
-        this.socketEventFactory(SocketEvent.FindDriverRequest,socketEventFn)
+    onFindDriverRequestFromRider(socketEventFn: SocketEventFn){
+        this.socketEventFactory(SocketEvent.FindDriverRequestFromRider,socketEventFn)
+    }
+    onDriverRespondToRiderRequest(socketEventFn: SocketEventFn){
+        this.socketEventFactory(SocketEvent.FindDriverResponseFromDriver,socketEventFn)
     }
 
     private socketEventFactory(eventName: string, socketEventFn: SocketEventFn) {
@@ -82,6 +97,8 @@ export enum SocketEvent  {
     Disconnect = 'disconnect',
     UpdateLocation = "UpdateLocation",
     DriverLocation = "DriverLocation",
-    FindDriverRequest = "FindDriverRequest",
-    FindDriverResponse ="FindDriverResponse"
+    FindDriverRequestFromRider = "FindDriverRequestFromRider",
+    FindDriverRequestToDriver = "FindDriverRequestToDriver",
+    FindDriverResponseFromDriver = "FindDriverResponseFromDriver",
+    FindDriverResponseToRider = "FindDriverResponseToRider",
 }
