@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import {DriverDocument, RiderDocument} from "./user";
+import {DriverDocument, RiderDocument, UserDocument} from "./user";
 import {GeoPointDB, MongooseGeoPoint} from "./location";
 
 export type TripDocument  = mongoose.Document & {
@@ -31,6 +31,8 @@ const tripSchema = new mongoose.Schema({
         default: 'RequestPending'
     }
 },{timestamps: true});
+
+export const TripRequest = mongoose.model<TripDocument>("TripRequest", tripSchema);
 
 export enum TripStatus {
     RequestPending = 'RequestPending',

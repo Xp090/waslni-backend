@@ -1,104 +1,144 @@
 import {Socket} from "socket.io";
-import {Driver, User, UserDocument} from "../models/user";
+import {Driver, DriverDocument, RiderDocument, User, UserDocument} from "../models/user";
+import {TripDocument, TripRequest} from "../models/trip";
 import {GeoPointDB, LngLat} from "../models/location";
-import {query} from "express-validator";
+import {fromEvent, Observable, Subscription} from "rxjs";
+import {SocketEventFactory} from "./SocketEventFactory";
+
 
 export function SocketHandler(userSocket: Socket) {
-    const handler = new SocketEventHandler(userSocket,(socket, user) => {
-        console.log(`${user.type} ${user.email} is connected`);
-        user.socketConnected = true;
+
+    let handler = new SocketEventHandler(userSocket, (handler) => {
+        console.log(`${handler.user.type} ${handler.user.email} is connected`);
+        handler.user.socketId = handler.socket.id;
+        handler.saveUser();
     });
 
-    handler.onUserDisconnected((socket, user) => {
-        console.log(`${user.type} ${user.email} is disconnected`);
-        user.socketConnected = true;
+    handler.onUserDisconnected().listenOnce().subscribe(() => {
+        console.log(`${handler.user.type} ${handler.user.email} is disconnected`);
+        handler.user.socketId = null;
+        handler.saveUser();
+        handler.disposeSubscriptions();
+        handler = null;
     });
 
-    handler.onUserUpdateLocation((socket, user, data) => {
-        user.location = GeoPointDB.create(data);
-        // if (user.type == "Driver") {
-        //     socket.broadcast.to("5d9cf5527b996135f898bea9").emit(SocketEvent.DriverLocation,data);
-        // }
+    handler.subscriptions = handler.onUserUpdateLocation().listen().subscribe(location => {
+        handler.user.location = GeoPointDB.create(location);
+        handler.saveUser();
     });
-    handler.onFindDriverRequestFromRider((socket, user, data) => {
-        Driver.find( { location: {
-                    $nearSphere: {
-                        // @ts-ignore
-                        $geometry:user.location,
-                        $maxDistance: 500000
-                    } } })
-            .find((err, drivers) => {
-                if (err) return;
-                if(drivers.length == 0){
-                    socket.to(user.id).emit(SocketEvent.FindDriverResponseToRider,"no_driver_found");
+    handler.subscriptions = handler.onFindDriverRequestFromRider()
+        .listenWithCallback().subscribe(({data:tripRequest, callback}) => {
+        Driver.find({
+            location: {
+                $nearSphere: {
+                    // @ts-ignore
+                    $geometry:  handler.user.location,
+                    $maxDistance: 500000
                 }
-                const foundDriver = drivers[0];
-                data.driver = foundDriver;
-                data.rider = user;
+            }
+        })
+            .find((err, drivers) => {
+                if (err || drivers.length == 0) {
+                    if (err) console.error(err);
+                    callback("no_driver_found");
+                    return;
+                }
+                const [foundDriver] = drivers; //todo better driver selection
+                tripRequest.driver = foundDriver;
+                tripRequest.rider = (handler.user as RiderDocument);
+                handler.sendTripRequestToDriver(foundDriver.socketId).emitThenListenOnce(tripRequest)
+                    .subscribe(didAccept => {
+                        if (!didAccept) {
+                            callback("Driver Declined")
+                        } else {
+                            callback(tripRequest.driver)
+                        }
+                    });
 
-                socket.broadcast.to(foundDriver.id).emit(SocketEvent.FindDriverRequestToDriver,data)
-                //socket.emit(SocketEvent.FindDriverResponse,foundDriver)
             })
     });
+    handler.socketEventFactory
+        .createSocketEventEmitterListener<object, boolean>(SocketEvent.DriverListenForRiderRequest)
+        .emitThenListenOnce({})
+        .subscribe(value => console.warn(value), err => console.error(err))
 
-    handler.onDriverRespondToRiderRequest((socket, user, data) => {
-        if (data.driver == null) {
-            socket.to(data.rider.id).emit(SocketEvent.FindDriverResponseToRider,"Driver Declined")
-        }else{
-            socket.to(data.rider.id).emit(SocketEvent.FindDriverResponseToRider,data.driver)
-        }
-    })
+    // handler.onDriverRespondToRiderRequest((socket, user, driverResponse) => {
+    //     if (!driverResponse) {
+    //         //socket.to(data.rider.id).emit(SocketEvent.RiderFindDriverRequest,"Driver Declined")
+    //     }else{
+    //       //  socket.to(data.rider.id).emit(SocketEvent.RiderFindDriverRequest,data.driver)
+    //     }
+    // })
+
+
 }
 
 
 export class SocketEventHandler {
-    socket: Socket;
-    user: UserDocument;
 
-    constructor(socket: Socket, socketConnectionEventFn: SocketEventFn) {
-        this.socket = socket;
-        this.user = socket.request.user;
-        this.onUserConnected(socketConnectionEventFn)
-    }
+    user: UserDocument = this.socket.request.user;
+    socketEventFactory = new SocketEventFactory(this.socket);
 
-    onUserConnected(socketEventFn: SocketEventFn) {
-        this.socket.join(this.user.id);
-        socketEventFn(this.socket,this.user,null);
+    private _subscriptions = new Subscription();
+
+
+    constructor(public socket: Socket, onConnection: (thisHandler: SocketEventHandler) => void) {
+        this.onUserConnected(onConnection)
     }
 
-    onUserDisconnected(socketEventFn: SocketEventFn) {
-       this.socketEventFactory(SocketEvent.Disconnect,socketEventFn)
+    private onUserConnected(onConnection: (thisHandler: SocketEventHandler) => void) {
+        onConnection(this);
     }
 
-    onUserUpdateLocation(socketEventFn: SocketEventFn<LngLat>) {
-        this.socketEventFactory(SocketEvent.UpdateLocation,socketEventFn)
-    }
-    onFindDriverRequestFromRider(socketEventFn: SocketEventFn){
-        this.socketEventFactory(SocketEvent.FindDriverRequestFromRider,socketEventFn)
-    }
-    onDriverRespondToRiderRequest(socketEventFn: SocketEventFn){
-        this.socketEventFactory(SocketEvent.FindDriverResponseFromDriver,socketEventFn)
+    saveUser() {
+        this.user.save((err: any, product: UserDocument) => {
+           if(err) console.error('socket user save error: ', err, product);
+        });
     }
 
-    private socketEventFactory(eventName: string, socketEventFn: SocketEventFn) {
-        this.socket.on(eventName,args => {
-            socketEventFn(this.socket,this.user,args);
-            this.user.save( (err: any, product: UserDocument) => {
-                console.error('socket user save error: ',err, product);
-            });
-        })
+
+    onUserDisconnected() {
+        return this.socketEventFactory.createSocketEventListener(SocketEvent.Disconnect)
     }
+
+    onUserUpdateLocation() {
+        return this.socketEventFactory.createSocketEventListener<LngLat>(SocketEvent.UpdateLocation);
+    }
+
+    onFindDriverRequestFromRider() { //todo trip type object
+        return this.socketEventFactory.createSocketEventEmitterListener<DriverDocument,TripDocument>(SocketEvent.RiderFindDriverRequest);
+    }
+
+    sendTripRequestToDriver(socketId?: string) {
+        return this.socketEventFactory
+            .createSocketEventEmitterListener<TripDocument, boolean>(SocketEvent.DriverListenForRiderRequest,socketId);
+    }
+
+    set subscriptions(subscription: Subscription) {
+        this._subscriptions.add(subscription)
+    }
+
+    disposeSubscriptions() {
+        this._subscriptions.unsubscribe();
+    }
+
+    // private socketEventFactory(eventName: string, socketEventFn: SocketEventFn) {
+    //     this.socket.on(eventName,async args => {
+    //         socketEventFn(this.socket,this.user,args);
+    //        await this.user.save( (err: any, product: UserDocument) => {
+    //             console.error('socket user save error: ',err, product);
+    //         });
+    //     })
+    // }
 }
 
 export type SocketEventFn<T = any, U = UserDocument> = (socket: Socket, user: U, data: T) => void;
 
-export enum SocketEvent  {
+export enum SocketEvent {
     Connection = 'connection',
     Disconnect = 'disconnect',
     UpdateLocation = "UpdateLocation",
-    DriverLocation = "DriverLocation",
-    FindDriverRequestFromRider = "FindDriverRequestFromRider",
-    FindDriverRequestToDriver = "FindDriverRequestToDriver",
-    FindDriverResponseFromDriver = "FindDriverResponseFromDriver",
-    FindDriverResponseToRider = "FindDriverResponseToRider",
+    RiderFindDriverRequest = "RiderFindDriverRequest",
+    DriverListenForRiderRequest = "DriverListenForRiderRequest"
+
 }

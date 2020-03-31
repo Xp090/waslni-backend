@@ -1,11 +1,12 @@
 import socketIo from "socket.io";
 import * as http from "http";
-import {Socket} from "socket.io";
 import {RiderDocument, User, UserDocument} from "../models/user";
 // @ts-ignore
 import  jwtAuth = require('socketio-jwt-auth');
 import {SESSION_SECRET} from "../util/secrets";
 import {SocketEvent, SocketHandler} from "./SocketEventHandler";
+
+
 
 export function initSocket(server: http.Server) {
     const io = socketIo(server);
@@ -26,6 +27,20 @@ export function initSocket(server: http.Server) {
     }));
 
     io.on(SocketEvent.Connection, SocketHandler);
+
+    // io.on('connection', socket => {
+    //     socket.on("asd",(args , callback) => {
+    //         console.warn(args);
+    //         callback("CALLED")
+    //     });
+    //     setTimeout(()=>{
+    //         socket.emit("qwer","back", function (resp: any) {
+    //             console.warn(resp)
+    //         })
+    //     },5000)
+    //
+    // });
+
 }
 
 

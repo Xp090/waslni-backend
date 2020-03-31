@@ -22,6 +22,7 @@ export type UserDocument = mongoose.Document & {
         birthDate: Date;
     }
 
+    socketId: string,
     socketConnected: boolean,
     location: GeoPointDB
 
@@ -55,6 +56,7 @@ const userSchema = new mongoose.Schema({
     },
     location: MongooseGeoPoint,
 
+    socketId: String,
     socketConnected: Boolean,
 }, {timestamps: true, discriminatorKey: "type"});
 userSchema.index({ "location": '2dsphere' });

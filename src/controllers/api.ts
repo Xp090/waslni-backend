@@ -54,6 +54,12 @@ export const getTripCost = (req: Request, res: Response, next: NextFunction) => 
                 tripEconomy: cost
             } );
             next();
-        });
+        })
+        .catch(reason => {
+            console.log(reason);
+            res.status(500).send(reason.toString());
+            next();
+        })
+    ;
 
 };

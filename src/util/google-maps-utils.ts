@@ -3,43 +3,13 @@
 import googleMaps, {LatLng} from '@google/maps';
 
 const googleMapsClient = googleMaps.createClient({
-    key : "AIzaSyAMIFGFtpTYqOxxlkdzzUYCjNZhQadvfGQ",
-    Promise: Promise
+    key : "AIzaSyBrhVCZX6kw2dKPOegwFhtbCC87XCV-Omw",
+    Promise: Promise,
+
 });
-// distance.key('AIzaSyAMIFGFtpTYqOxxlkdzzUYCjNZhQadvfGQ');
+
 
 export class GoogleMapsUtils {
-    // static calcDistance(origin: string , destination: string , options?:GoogleDistanceOptions){
-    //     return new Promise<GoogleDistanceResult>((resolve, reject) => {
-    //         if(options){
-    //             distance.mode(options.mode);
-    //             distance.language(options.language);
-    //             distance.avoid(options.avoid);
-    //             distance.units(options.units);
-    //             distance.departure_time(options.departure_time);
-    //             distance.arrival_time(options.arrival_time);
-    //             distance.traffic_model(options.traffic_model);
-    //         }
-    //         distance.matrix([origin], [destination], (err:any, distances:any) => {
-    //             if (!err){
-    //                 try {
-    //                     const result:GoogleDistanceResult = distances.rows[0].elements[0];
-    //                     if(result.status == 'OK'){
-    //                         console.log(distances);
-    //                         resolve(result);
-    //                     }else{
-    //                         reject('not_reachable_by_land');
-    //                     }
-    //                 }catch (e) {
-    //                     reject('unable_to_calculate_distance');
-    //                 }
-    //             } else{
-    //                 console.error(err);
-    //                 reject(err)
-    //             }
-    //         });
-    //     })
-    // }
 
     static getDirections(origin:LatLng, destination:LatLng ) : Promise<GoogleDirectionsResult> {
        return  googleMapsClient.directions({destination: origin,origin: destination})
@@ -57,6 +27,7 @@ export class GoogleMapsUtils {
                 };
                 return googleDirectionsResult;
             })
+
     }
 }
 
