@@ -23,10 +23,15 @@ export class SocketEventListener<L> extends  SocketEventEmitter<never> {
 
     listen(): Observable<L> {
         return fromEvent<L>(this.socket,this.eventName)
+            .pipe(map(data => data[0] && !data[1] ? data[0] : data))
     }
 
     listenOnce(): Observable<L> {
-        return fromEvent<L>(this.socket,this.eventName).pipe(first());
+        return fromEvent<L>(this.socket,this.eventName)
+            .pipe(
+                map(data => data[0] && !data[1] ? data[0] : data),
+                first()
+            );
     }
 
 }
@@ -60,13 +65,19 @@ export class SocketEventEmitterListener<E,L> extends SocketEventListener<L>{
 
     listenWithCallback(): Observable<SocketDataWrapper<L, E>>  {
       return this.listen().pipe(map((args) => {
-            return {data: args[0], callback: args[1]}
+            return {
+                data: args[0] || args,
+                callback: args[1] || (() => console.warn(`No callback received from event ${this.eventName}`))
+            }
         } ))
     }
 
     listenWithCallbackOnce(): Observable<SocketDataWrapper<L, E>> {
         return this.listenOnce().pipe(map((args) => {
-            return {data: args[0], callback: args[1]}
+            return {
+                data: args[0] || args,
+                callback: args[1] || (() => console.warn(`No callback received from event ${this.eventName}`))
+            }
         } ))
     }
 }

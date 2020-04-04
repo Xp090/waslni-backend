@@ -3,7 +3,7 @@ import {SocketEventEmitter, SocketEventEmitterListener, SocketEventListener} fro
 
 export class SocketEventFactory {
 
-    listenTimeout = 3000;
+    listenTimeout = 30000;
     constructor(public socket: Socket) {
 
     }

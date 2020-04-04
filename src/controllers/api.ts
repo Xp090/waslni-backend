@@ -8,7 +8,8 @@ import "../config/passport";
 import jwt from "jsonwebtoken";
 import {SESSION_SECRET} from "../util/secrets";
 import {GoogleMapsUtils} from "../util/google-maps-utils";
-import {TripEconomy} from "../models/trip";
+import {TripEconomy} from "../models/ride-request";
+
 
 export const postLoginApi = (req: Request, res: Response, next: NextFunction) => {
     check("email", "Email is not valid").isEmail();

@@ -37,7 +37,7 @@ export class LngLat {
     longitude: number;
 }
 
-export const  MongooseGeoPoint = {
+export const GeoPointSchema = {
     type: {
         type: String,
         enum: ['Point'],

@@ -1,9 +1,9 @@
 import {Socket} from "socket.io";
 import {Driver, DriverDocument, RiderDocument, User, UserDocument} from "../models/user";
-import {TripDocument, TripRequest} from "../models/trip";
 import {GeoPointDB, LngLat} from "../models/location";
 import {fromEvent, Observable, Subscription} from "rxjs";
 import {SocketEventFactory} from "./SocketEventFactory";
+import {RideRequestDocument} from "../models/ride-request";
 
 
 export function SocketHandler(userSocket: Socket) {
@@ -44,32 +44,20 @@ export function SocketHandler(userSocket: Socket) {
                     return;
                 }
                 const [foundDriver] = drivers; //todo better driver selection
-                tripRequest.driver = foundDriver;
                 tripRequest.rider = (handler.user as RiderDocument);
                 handler.sendTripRequestToDriver(foundDriver.socketId).emitThenListenOnce(tripRequest)
                     .subscribe(didAccept => {
                         if (!didAccept) {
                             callback("Driver Declined")
                         } else {
-                            callback(tripRequest.driver)
+                            //callback(tripRequest.driver)
                         }
+                    },error => {
+                        callback("no_driver_found")
                     });
 
             })
     });
-    handler.socketEventFactory
-        .createSocketEventEmitterListener<object, boolean>(SocketEvent.DriverListenForRiderRequest)
-        .emitThenListenOnce({})
-        .subscribe(value => console.warn(value), err => console.error(err))
-
-    // handler.onDriverRespondToRiderRequest((socket, user, driverResponse) => {
-    //     if (!driverResponse) {
-    //         //socket.to(data.rider.id).emit(SocketEvent.RiderFindDriverRequest,"Driver Declined")
-    //     }else{
-    //       //  socket.to(data.rider.id).emit(SocketEvent.RiderFindDriverRequest,data.driver)
-    //     }
-    // })
-
 
 }
 
@@ -106,12 +94,12 @@ export class SocketEventHandler {
     }
 
     onFindDriverRequestFromRider() { //todo trip type object
-        return this.socketEventFactory.createSocketEventEmitterListener<DriverDocument,TripDocument>(SocketEvent.RiderFindDriverRequest);
+        return this.socketEventFactory.createSocketEventEmitterListener<DriverDocument,RideRequestDocument>(SocketEvent.RiderFindDriverRequest);
     }
 
     sendTripRequestToDriver(socketId?: string) {
         return this.socketEventFactory
-            .createSocketEventEmitterListener<TripDocument, boolean>(SocketEvent.DriverListenForRiderRequest,socketId);
+            .createSocketEventEmitterListener<RideRequestDocument, boolean>(SocketEvent.DriverListenForRiderRequest,socketId);
     }
 
     set subscriptions(subscription: Subscription) {
@@ -122,14 +110,6 @@ export class SocketEventHandler {
         this._subscriptions.unsubscribe();
     }
 
-    // private socketEventFactory(eventName: string, socketEventFn: SocketEventFn) {
-    //     this.socket.on(eventName,async args => {
-    //         socketEventFn(this.socket,this.user,args);
-    //        await this.user.save( (err: any, product: UserDocument) => {
-    //             console.error('socket user save error: ',err, product);
-    //         });
-    //     })
-    // }
 }
 
 export type SocketEventFn<T = any, U = UserDocument> = (socket: Socket, user: U, data: T) => void;

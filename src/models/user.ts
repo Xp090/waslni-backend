@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt-nodejs";
 import crypto from "crypto";
 import mongoose, {Schema} from "mongoose";
-import {GeoPointDB, MongooseGeoPoint} from "./location";
+import {GeoPointDB, GeoPointSchema} from "./location";
 
 
 const options = {discriminatorKey: 'type'};
@@ -54,7 +54,7 @@ const userSchema = new mongoose.Schema({
         picture: String,
         rating: Number
     },
-    location: MongooseGeoPoint,
+    location: GeoPointSchema,
 
     socketId: String,
     socketConnected: Boolean,
