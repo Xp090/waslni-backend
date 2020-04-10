@@ -3,19 +3,21 @@ import {Driver, DriverDocument, RiderDocument, User, UserDocument} from "../mode
 import {GeoPointDB, LngLat} from "../models/location";
 import {fromEvent, Observable, Subscription} from "rxjs";
 import {SocketEventFactory} from "./SocketEventFactory";
-import {RideRequestDocument} from "../models/ride-request";
+import {RideRequest, RideRequestDocument} from "../models/ride-request";
+import {DriverFinder} from "../util/driver-finder";
+import {TripDocument} from "../models/trip";
 
 
 export function SocketHandler(userSocket: Socket) {
 
     let handler = new SocketEventHandler(userSocket, (handler) => {
-        console.log(`${handler.user.type} ${handler.user.email} is connected`);
+        console.log(`${handler.user.type} ${handler.user.email} ${handler.socket.id} is connected`);
         handler.user.socketId = handler.socket.id;
         handler.saveUser();
     });
 
     handler.onUserDisconnected().listenOnce().subscribe(() => {
-        console.log(`${handler.user.type} ${handler.user.email} is disconnected`);
+        console.log(`${handler.user.type} ${handler.user.email} ${handler.socket.id} is disconnected`);
         handler.user.socketId = null;
         handler.saveUser();
         handler.disposeSubscriptions();
@@ -27,37 +29,14 @@ export function SocketHandler(userSocket: Socket) {
         handler.saveUser();
     });
     handler.subscriptions = handler.onFindDriverRequestFromRider()
-        .listenWithCallback().subscribe(({data:tripRequest, callback}) => {
-        Driver.find({
-            location: {
-                $nearSphere: {
-                    // @ts-ignore
-                    $geometry:  handler.user.location,
-                    $maxDistance: 500000
-                }
-            }
-        })
-            .find((err, drivers) => {
-                if (err || drivers.length == 0) {
-                    if (err) console.error(err);
-                    callback("no_driver_found");
-                    return;
-                }
-                const [foundDriver] = drivers; //todo better driver selection
-                tripRequest.rider = (handler.user as RiderDocument);
-                handler.sendTripRequestToDriver(foundDriver.socketId).emitThenListenOnce(tripRequest)
-                    .subscribe(didAccept => {
-                        if (!didAccept) {
-                            callback("Driver Declined")
-                        } else {
-                            //callback(tripRequest.driver)
-                        }
-                    },error => {
-                        callback("no_driver_found")
-                    });
-
-            })
-    });
+        .listenWithCallback().subscribe(({data: tripRequest, callback}) => {
+            const driverFinder = new DriverFinder(handler,tripRequest);
+            driverFinder.find(trip => {
+                callback(trip)
+           }, err => {
+                callback(err)
+           })
+        });
 
 }
 
@@ -80,7 +59,7 @@ export class SocketEventHandler {
 
     saveUser() {
         this.user.save((err: any, product: UserDocument) => {
-           if(err) console.error('socket user save error: ', err, product);
+            if (err) console.error('socket user save error: ', err, product);
         });
     }
 
@@ -93,13 +72,13 @@ export class SocketEventHandler {
         return this.socketEventFactory.createSocketEventListener<LngLat>(SocketEvent.UpdateLocation);
     }
 
-    onFindDriverRequestFromRider() { //todo trip type object
-        return this.socketEventFactory.createSocketEventEmitterListener<DriverDocument,RideRequestDocument>(SocketEvent.RiderFindDriverRequest);
+    onFindDriverRequestFromRider() {
+        return this.socketEventFactory.createSocketEventEmitterListener<TripDocument, RideRequest>(SocketEvent.RiderFindDriverRequest);
     }
 
     sendTripRequestToDriver(socketId?: string) {
         return this.socketEventFactory
-            .createSocketEventEmitterListener<RideRequestDocument, boolean>(SocketEvent.DriverListenForRiderRequest,socketId);
+            .createSocketEventEmitterListener<RideRequestDocument, boolean>(SocketEvent.DriverListenForRiderRequest, socketId);
     }
 
     set subscriptions(subscription: Subscription) {

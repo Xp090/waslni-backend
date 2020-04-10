@@ -1,6 +1,7 @@
-import {Driver, DriverDocument} from "../models/user";
+import {Driver, DriverDocument, RiderDocument} from "../models/user";
 import {SocketEventHandler} from "../socket/SocketEventHandler";
-import {RideDriverResponse, RideRequest, RideRequestDocument} from "../models/ride-request";
+import {RideDriverResponse, RideRequestModel, RideRequestDocument, RideRequest} from "../models/ride-request";
+import {Trip, TripDocument} from "../models/trip";
 
 export class DriverFinder {
 
@@ -27,21 +28,21 @@ export class DriverFinder {
     protected availableDrivers: DriverDocument[];
 
 
-    protected successCallback: (driver: DriverDocument) => void = null;
+    protected successCallback: (driver: TripDocument) => void = null;
     protected errorCallback: (err: any) => void = null;
 
     protected sentRideRequest: RideRequestDocument = null;
 
-    constructor(protected handler: SocketEventHandler, private _rideRequest: RideRequestDocument) {
-
+    constructor(protected handler: SocketEventHandler, private _rideRequest: RideRequest) {
+        _rideRequest.rider = handler.user as RiderDocument
     }
 
 
-    async find(success?: (driver: DriverDocument) => void, error?: (err: any) => void) {
+    async find(success?: (driver: TripDocument) => void, error?: (err: any) => void) {
         this.successCallback = success;
         this.errorCallback = error;
         try {
-            this.sentRideRequest = await RideRequest.create(this._rideRequest);
+            this.sentRideRequest = await RideRequestModel.create(this._rideRequest);
             this.availableDrivers = await this.getDrivers();
             this.tryNextDrivers();
         } catch (e) {
@@ -124,11 +125,13 @@ export class DriverFinder {
         this.tryNextDrivers();
     }
 
-    protected onFindingDone(acceptedDriver: DriverDocument) {
+    protected async onFindingDone(acceptedDriver: DriverDocument) {
         this.sentRideRequest.requestStatus = RideDriverResponse.RequestAcceptedByDriver;
-        this.sentRideRequest.acceptedDriver = acceptedDriver;
+        this.sentRideRequest.driver = acceptedDriver;
         this.sentRideRequest.save();
-        this.successCallback?.(acceptedDriver)
+        const trip = await Trip.create({rideRequest: this.sentRideRequest});
+        await trip.populate("rideRequest.rider").populate("rideRequest.driver").execPopulate();
+        this.successCallback?.(trip)
     }
 
     protected onFindingFailed(err: any) {
@@ -148,7 +151,7 @@ export class DriverFinder {
             sentRequest.responseDate = new Date();
         }
         this.sentRideRequest.requestsSent.set(driver.id, sentRequest);
-        this.sentRideRequest.save();
+        // this.sentRideRequest.save();
     }
 
     get isDriverFound() {

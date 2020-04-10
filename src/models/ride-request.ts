@@ -1,6 +1,8 @@
 import mongoose, {Types} from "mongoose";
 import {DriverDocument, RiderDocument, UserDocument} from "./user";
-import {GeoPointDB, GeoPointSchema} from "./location";
+import {GeoPointDB, geoPointSchema, LngLat} from "./location";
+import mongooseAutoPopulate from "mongoose-autopopulate";
+
 
 export enum RideDriverResponse {
     RequestPending = 'RequestPending',
@@ -10,32 +12,43 @@ export enum RideDriverResponse {
     RequestTimedOut = 'RequestTimedOut'
 }
 
-export type RideRequestDocument = mongoose.Document & {
-    rider: mongoose.Types.ObjectId | RiderDocument,
-    fromAddress: string,
-    fromPoint: GeoPointDB,
-    toAddress: string,
-    toPoint: GeoPointDB,
-    requestsSent: Map<String,SentRideRequest>
-    requestStatus: RideDriverResponse
-    acceptedDriver: mongoose.Types.ObjectId | DriverDocument
+
+export interface RideRequest  {
+    pickupPoint: LngLat,
+    pickupAddress: string,
+    destinationPoint: LngLat,
+    destinationAddress: string,
+    rider?: RiderDocument
 }
 
-const rideRequestSchema = new mongoose.Schema({
+export interface RideRequestDocument extends mongoose.Document {
+    rider: mongoose.Types.ObjectId | RiderDocument,
+    pickupPoint: GeoPointDB,
+    pickupAddress: string,
+    destinationPoint: GeoPointDB,
+    destinationAddress: string,
+    requestsSent: Map<String,SentRideRequest>
+    requestStatus: RideDriverResponse
+    driver: mongoose.Types.ObjectId | DriverDocument
+}
+
+export const rideRequestSchema = new mongoose.Schema({
     rider: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Rider'
+        ref: 'Rider',
+        // autopopulate: true
     },
-    fromAddress: String,
-    fromPoint: GeoPointSchema,
-    toAddress: String,
-    toPoint: GeoPointSchema,
+    pickupPoint: geoPointSchema,
+    pickupAddress: String,
+    destinationPoint: geoPointSchema,
+    destinationAddress: String,
+
     requestsSent: {
         type: Map,
         of: {
             driver: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: 'Driver'
+                ref: 'Driver',
             },
             requestDate: {
                 type: Date,
@@ -48,26 +61,34 @@ const rideRequestSchema = new mongoose.Schema({
             },
             responseDate: Date
 
-        }
+        },
+        default: new Map<string,SentRideRequest>(),
+
     },
-    acceptedDriver: {
+    driver: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Driver',
+        // autopopulate: true
     },
     requestStatus: {
         type: String,
         enum: Object.keys(RideDriverResponse),
         default: RideDriverResponse.RequestPending
     }
-    // tripStatus:  {
-    //     type: String,
-    //     enum: ['RequestPending', 'RequestCanceledByRider', 'RequestCanceledByDriver', 'DriverOnTheWay', 'TripOngoing', 'TripEnded'],
-    //     default: 'RequestPending'
-    // }
-}, {timestamps: true});
+}, {
+    timestamps: true,
+    toJSON: {
+        transform: (doc, ret, options) => {
+            delete ret._id;
+            delete ret.requestsSent;
+        },
+        versionKey: false,
+        virtuals: true
+    }
+});
+rideRequestSchema.plugin(mongooseAutoPopulate);
 
-
-export const RideRequest = mongoose.model<RideRequestDocument>("RideRequest", rideRequestSchema);
+export const RideRequestModel = mongoose.model<RideRequestDocument>("RideRequest", rideRequestSchema);
 
 
 
@@ -78,15 +99,4 @@ export interface SentRideRequest {
     responseDate?: Date
 }
 
-export enum TripStatus {
-    RequestPending = 'RequestPending',
-    RequestCanceledByRider = 'RequestCanceledByRider',
-    RequestCanceledByDriver = 'RequestCanceledByDriver',
-    DriverOnTheWay = 'DriverOnTheWay',
-    TripOngoing = 'TripOngoing',
-    TripEnded = 'TripEnded'
-}
 
-export interface TripEconomy {
-    cost: number;
-}

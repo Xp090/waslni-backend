@@ -1,6 +1,7 @@
 import {fromEvent, Observable} from "rxjs";
 import {Socket} from "socket.io";
 import {first, map, single, timeout} from "rxjs/internal/operators";
+import {SentRideRequest} from "../models/ride-request";
 
 
 
