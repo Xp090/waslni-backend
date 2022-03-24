@@ -3,7 +3,7 @@
 import googleMaps, {LatLng} from '@google/maps';
 
 const googleMapsClient = googleMaps.createClient({
-    key : "AIzaSyBrhVCZX6kw2dKPOegwFhtbCC87XCV-Omw",
+    key : "",
     Promise: Promise,
 
 });
